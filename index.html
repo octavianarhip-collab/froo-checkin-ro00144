@@ -53,6 +53,9 @@
     p.set('usp', 'pp_url');
     p.set('entry.1368133778', operator);
     p.set('entry.455388205', 'Check-in tura');
+    if (operator === 'Madalina' || operator === 'Anca') {
+      p.set('entry.16512039', 'Tura lunga 07:00-22:00');
+    }
     return FORM_BASE_URL + '?' + p.toString();
   }
 
