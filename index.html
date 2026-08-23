@@ -10,8 +10,8 @@
 </head>
 <body>
 <main class="wrap"><section class="card">
-<h1>FROO RO00144</h1>
-<p class="sub">Selectează Operatorul și continuă.</p>
+<h1 id="pageTitle">FROO RO00144</h1>
+<p id="pageSub" class="sub">Selectează Operatorul și continuă.</p>
 <div id="rememberedBox" class="remembered"><strong id="rememberedText"></strong><br><button id="changeOperatorBtn" type="button">Schimbă Operatorul</button></div>
 <div id="operatorBlock"><label for="operator">Operator</label><select id="operator"><option value="">Selectează operatorul</option><option value="Madalina">Mădălina</option><option value="Anca">Anca</option><option value="Operator tura scurta">Operator tură scurtă</option></select></div>
 <button id="continueBtn" class="primary" type="button">Continuă</button>
@@ -22,7 +22,7 @@
   <p id="shiftTitle" class="shiftTitle"></p>
   <div id="taskList"></div>
 </div>
-<p class="note">Operatorul este memorat pe acest dispozitiv doar pentru ziua curentă. După check-in, sunt afișate numai taskurile atribuite turei selectate, plus taskurile comune ambelor ture.</p>
+<p id="pageNote" class="note">Operatorul este memorat pe acest dispozitiv doar pentru ziua curentă. După check-in, sunt afișate numai taskurile atribuite turei selectate, plus taskurile comune ambelor ture.</p>
 </section></main>
 <script>
 const STORE_LAT=44.47831860912019;
@@ -30,6 +30,7 @@ const STORE_LNG=26.04044731207135;
 const RADIUS_M=100;
 const FORM_BASE_URL='https://docs.google.com/forms/d/e/1FAIpQLScX8oh0uhfPRBiNvSzKuPzLphcNtUnmcVA-0SOV5n06bFQ6cQ/viewform';
 const SCRIPT_URL='https://script.google.com/macros/s/AKfycbyl6sJYPPnq03K-SWNPrd5RI2ppbFfk94QWOmtMD0GyUbv0P3WNkvxdyVs_sdG-Dd0IAQ/exec';
+const DASHBOARD_URL='https://docs.google.com/spreadsheets/d/1IJ5E2LB4VQQUOmTxe4oyUU6qXGwHcsNRrFp_zNSNowk/edit#gid=1433658858';
 const STORAGE_KEY='froo_ro00144_operator_day';
 const TASK_ENTRY_ID='entry.1604491701';
 
@@ -61,7 +62,7 @@ const TASKS=[
 {id:'T016',time:'21:45',name:'Curățenie sală, Bistro, Bake-Off și golire coșuri',shift:'long'}
 ];
 
-const continueBtn=document.getElementById('continueBtn'),operatorSelect=document.getElementById('operator'),operatorBlock=document.getElementById('operatorBlock'),rememberedBox=document.getElementById('rememberedBox'),rememberedText=document.getElementById('rememberedText'),changeOperatorBtn=document.getElementById('changeOperatorBtn'),status=document.getElementById('status'),tasksBox=document.getElementById('tasks'),taskList=document.getElementById('taskList'),shiftTitle=document.getElementById('shiftTitle');
+const continueBtn=document.getElementById('continueBtn'),operatorSelect=document.getElementById('operator'),operatorBlock=document.getElementById('operatorBlock'),rememberedBox=document.getElementById('rememberedBox'),rememberedText=document.getElementById('rememberedText'),changeOperatorBtn=document.getElementById('changeOperatorBtn'),status=document.getElementById('status'),tasksBox=document.getElementById('tasks'),taskList=document.getElementById('taskList'),shiftTitle=document.getElementById('shiftTitle'),pageTitle=document.getElementById('pageTitle'),pageSub=document.getElementById('pageSub'),pageNote=document.getElementById('pageNote');
 function todayKey(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function displayOperator(o){if(o==='Madalina')return'Mădălina';if(o==='Operator tura scurta')return'Operator tură scurtă';return o}
 function getRememberedOperator(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return'';const data=JSON.parse(raw);if(!data||data.date!==todayKey()||!data.operator){localStorage.removeItem(STORAGE_KEY);return''}return data.operator}catch(e){return''}}
@@ -79,9 +80,12 @@ function showGeoError(e){setBusy(false);if(e.code===1)status.innerHTML='<span cl
 function checkServerCheckin(operator){return new Promise((resolve,reject)=>{const cb='frooStatus_'+Date.now()+'_'+Math.floor(Math.random()*100000);const s=document.createElement('script');const timer=setTimeout(()=>{cleanup();reject(new Error('timeout'))},10000);function cleanup(){clearTimeout(timer);delete window[cb];s.remove()}window[cb]=data=>{cleanup();resolve(!!(data&&data.ok&&data.checkedIn))};s.onerror=()=>{cleanup();reject(new Error('network'))};s.src=SCRIPT_URL+'?mode=status&operator='+encodeURIComponent(operator)+'&callback='+encodeURIComponent(cb)+'&_='+Date.now();document.body.appendChild(s)})}
 async function doInitialCheckin(operator){if(!navigator.geolocation){status.innerHTML='<span class="bad">Acest browser nu permite accesul la locație.</span>';setBusy(false);return}status.textContent='Se pregătește începutul turei...';navigator.geolocation.getCurrentPosition(async pos=>{const lat=pos.coords.latitude,lng=pos.coords.longitude,accuracy=Math.round(pos.coords.accuracy||0),distance=Math.round(distanceMeters(lat,lng,STORE_LAT,STORE_LNG)),inStoreArea=distance<=RADIUS_M?'DA':'NU';try{await saveLocation({operator,latitude:lat,longitude:lng,accuracy,distance,inStoreArea});status.innerHTML='<span class="ok">Locația a fost înregistrată.</span> Se deschide check-in-ul...';setTimeout(()=>window.location.assign(buildFormUrl(operator,'Check-in tura')),500)}catch(e){setBusy(false);status.innerHTML='<span class="bad">Înregistrarea nu a putut fi salvată. Încearcă din nou.</span>'}},showGeoError,{enableHighAccuracy:true,timeout:30000,maximumAge:15000})}
 function showTasks(operator){const sk=shiftKey(operator);const items=TASKS.filter(t=>t.shift===sk||t.shift==='both').sort((a,b)=>a.time.localeCompare(b.time));shiftTitle.textContent=(sk==='long'?'Tură lungă 07:00–22:00':'Tură scurtă 07:00–16:00')+' • '+items.length+' taskuri alocate';taskList.innerHTML='';items.forEach(t=>{const d=document.createElement('div');d.className='task';d.innerHTML='<div class="taskTop"><div class="taskName">'+t.name+'</div><div class="time">'+t.time+'</div></div><small>'+t.id+'</small>'+(t.shift==='both'?'<span class="shared">Ambele ture</span>':'')+'<button type="button" class="secondary">Deschide acest task</button>';d.querySelector('button').addEventListener('click',()=>window.location.assign(buildFormUrl(operator,'Executare task',t.name)));taskList.appendChild(d)});tasksBox.style.display='block';tasksBox.scrollIntoView({behavior:'smooth',block:'start'})}
+function isManagerAlertMode(){const p=new URLSearchParams(window.location.search);return (p.get('manager')||'').toLowerCase()==='elena'&&(p.get('source')||'').toLowerCase()==='alerta'}
+function goDashboard(){window.location.assign(DASHBOARD_URL)}
+function managerAlertLocation(){operatorBlock.style.display='none';rememberedBox.style.display='none';tasksBox.style.display='none';pageTitle.textContent='FROO RO00144 — Manager';pageSub.textContent='Se înregistrează locația pentru accesul din alerta operațională.';pageNote.textContent='Locația este folosită doar pentru această accesare. Istoricul locațiilor nu este afișat în Dashboard.';continueBtn.textContent='Continuă către Dashboard';continueBtn.onclick=goDashboard;if(!navigator.geolocation){status.innerHTML='<span class="bad">Locația nu este disponibilă pe acest dispozitiv.</span> Se deschide Dashboard-ul...';setTimeout(goDashboard,1200);return}setBusy(true);status.textContent='Se solicită locația...';navigator.geolocation.getCurrentPosition(async pos=>{const lat=pos.coords.latitude,lng=pos.coords.longitude,accuracy=Math.round(pos.coords.accuracy||0),distance=Math.round(distanceMeters(lat,lng,STORE_LAT,STORE_LNG)),inStoreArea=distance<=RADIUS_M?'DA':'NU';try{await saveLocation({operator:'Elena',latitude:lat,longitude:lng,accuracy,distance,inStoreArea,source:'alerta_manager'});status.innerHTML='<span class="ok">Locația a fost înregistrată.</span> Se deschide Dashboard-ul...'}catch(e){status.innerHTML='<span class="bad">Locația nu a putut fi salvată.</span> Se deschide Dashboard-ul...'}setTimeout(goDashboard,700)},e=>{setBusy(false);if(e.code===1)status.innerHTML='<span class="bad">Accesul la locație nu a fost permis.</span> Apasă butonul pentru Dashboard.';else status.innerHTML='<span class="bad">Locația nu a putut fi determinată.</span> Apasă butonul pentru Dashboard.'},{enableHighAccuracy:true,timeout:30000,maximumAge:15000})}
 changeOperatorBtn.addEventListener('click',clearRememberedOperator);
-continueBtn.addEventListener('click',async()=>{const operator=requireOperator();if(!operator)return;rememberOperator(operator);setBusy(true);status.textContent='Se verifică statusul turei...';try{const checkedIn=await checkServerCheckin(operator);if(checkedIn){status.innerHTML='<span class="ok">Check-in găsit.</span> Mai jos sunt doar taskurile acestei ture.';showTasks(operator);setBusy(false)}else{await doInitialCheckin(operator)}}catch(e){setBusy(false);status.innerHTML='<span class="bad">Nu am putut verifica check-in-ul. Încearcă din nou.</span>'}});
-const remembered=getRememberedOperator();if(remembered)applyRememberedState(remembered);
+continueBtn.addEventListener('click',async()=>{if(isManagerAlertMode())return;const operator=requireOperator();if(!operator)return;rememberOperator(operator);setBusy(true);status.textContent='Se verifică statusul turei...';try{const checkedIn=await checkServerCheckin(operator);if(checkedIn){status.innerHTML='<span class="ok">Check-in găsit.</span> Mai jos sunt doar taskurile acestei ture.';showTasks(operator);setBusy(false)}else{await doInitialCheckin(operator)}}catch(e){setBusy(false);status.innerHTML='<span class="bad">Nu am putut verifica check-in-ul. Încearcă din nou.</span>'}});
+if(isManagerAlertMode()){managerAlertLocation()}else{const remembered=getRememberedOperator();if(remembered)applyRememberedState(remembered)}
 </script>
 </body>
 </html>
