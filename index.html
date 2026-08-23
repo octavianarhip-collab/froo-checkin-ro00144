@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>FROO RO00144 - Check-in</title>
   <style>
-    :root { color-scheme: light; }
     * { box-sizing: border-box; }
     body { margin: 0; font-family: Arial, Helvetica, sans-serif; background: #f5f7f6; color: #1f2937; }
     .wrap { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
@@ -28,7 +27,6 @@
     <section class="card">
       <h1>FROO RO00144</h1>
       <p class="sub">Check-in operator. Locația este solicitată o singură dată la începutul turei pentru verificarea prezenței la magazin.</p>
-
       <label for="operator">Operator</label>
       <select id="operator">
         <option value="">Selectează operatorul</option>
@@ -36,30 +34,34 @@
         <option value="Anca">Anca</option>
         <option value="Operator tura scurta">Operator tură scurtă</option>
       </select>
-
       <button id="btn" type="button">Continuă către formular</button>
       <div id="status" role="status" aria-live="polite"></div>
-      <p class="note">Browserul îți va cere permisiunea pentru locație. Coordonatele sunt folosite numai pentru check-in.</p>
+      <p class="note">Prin continuare, browserul îți va cere permisiunea pentru locație. Locația este folosită numai pentru acest check-in.</p>
     </section>
   </main>
-
 <script>
   const STORE_LAT = 44.47831860912019;
   const STORE_LNG = 26.04044731207135;
   const RADIUS_M = 100;
-  const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScX8oh0uhfPRBiNvSzKuPzLphcNtUnmcVA-0SOV5n06bFQ6cQ/viewform?usp=dialog';
+  const FORM_BASE_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScX8oh0uhfPRBiNvSzKuPzLphcNtUnmcVA-0SOV5n06bFQ6cQ/viewform';
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyl6sJYPPnq03K-SWNPrd5RI2ppbFfk94QWOmtMD0GyUbv0P3WNkvxdyVs_sdG-Dd0IAQ/exec';
-
   const btn = document.getElementById('btn');
   const status = document.getElementById('status');
+
+  function buildFormUrl(operator) {
+    const p = new URLSearchParams();
+    p.set('usp', 'pp_url');
+    p.set('entry.1368133778', operator);
+    p.set('entry.455388205', 'Check-in tura');
+    return FORM_BASE_URL + '?' + p.toString();
+  }
 
   function distanceMeters(lat1, lon1, lat2, lon2) {
     const R = 6371000;
     const toRad = v => v * Math.PI / 180;
     const dLat = toRad(lat2 - lat1);
     const dLon = toRad(lon2 - lon1);
-    const a = Math.sin(dLat/2) ** 2 +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2) ** 2;
+    const a = Math.sin(dLat/2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2) ** 2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   }
 
@@ -78,47 +80,25 @@
 
   btn.addEventListener('click', () => {
     const operator = document.getElementById('operator').value;
-    if (!operator) {
-      status.innerHTML = '<span class="bad">Selectează operatorul.</span>';
-      return;
-    }
-    if (!navigator.geolocation) {
-      status.innerHTML = '<span class="bad">Acest browser nu permite accesul la locație.</span>';
-      return;
-    }
-
+    if (!operator) { status.innerHTML = '<span class="bad">Selectează operatorul.</span>'; return; }
+    if (!navigator.geolocation) { status.innerHTML = '<span class="bad">Acest browser nu permite accesul la locație.</span>'; return; }
     btn.disabled = true;
     status.textContent = 'Se verifică locația...';
-
     navigator.geolocation.getCurrentPosition(async pos => {
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
       const accuracy = Math.round(pos.coords.accuracy || 0);
       const distance = Math.round(distanceMeters(lat, lng, STORE_LAT, STORE_LNG));
       const inStoreArea = distance <= RADIUS_M ? 'DA' : 'NU';
-
       try {
-        await saveLocation({
-          operator,
-          latitude: lat,
-          longitude: lng,
-          accuracy,
-          distance,
-          inStoreArea,
-          userAgent: navigator.userAgent
-        });
-
+        await saveLocation({ operator, latitude: lat, longitude: lng, accuracy, distance, inStoreArea });
         status.innerHTML = '<span class="ok">Check-in înregistrat.</span> Se deschide formularul...';
-        setTimeout(() => window.location.assign(FORM_URL), 900);
+        setTimeout(() => window.location.assign(buildFormUrl(operator)), 900);
       } catch (e) {
         btn.disabled = false;
         status.innerHTML = '<span class="bad">Locația a fost obținută, dar salvarea check-in-ului a eșuat.</span>';
       }
-    }, showGeoError, {
-      enableHighAccuracy: true,
-      timeout: 30000,
-      maximumAge: 15000
-    });
+    }, showGeoError, { enableHighAccuracy: true, timeout: 30000, maximumAge: 15000 });
   });
 </script>
 </body>
