@@ -17,7 +17,6 @@
     button { margin-top: 14px; border: 0; font-weight: 700; cursor: pointer; padding: 0 14px; }
     button:disabled { opacity: .6; cursor: wait; }
     .primary { background: #188038; color: white; }
-    .secondary { background: #e8f0ea; color: #137333; border: 1px solid #b7d6bf; }
     .remembered { display: none; margin: 0 0 18px; padding: 12px 14px; border-radius: 12px; background: #eef7f0; color: #137333; line-height: 1.4; }
     .remembered button { width: auto; min-height: 0; margin: 8px 0 0; padding: 0; background: transparent; color: #5f6b76; font-size: 13px; font-weight: 400; text-decoration: underline; }
     #status { margin-top: 18px; line-height: 1.45; min-height: 22px; }
@@ -30,7 +29,7 @@
   <main class="wrap">
     <section class="card">
       <h1>FROO RO00144</h1>
-      <p class="sub">Selectează Operatorul, apoi alege ce vrei să faci.</p>
+      <p class="sub">Selectează Operatorul și continuă.</p>
 
       <div id="rememberedBox" class="remembered">
         <strong id="rememberedText"></strong><br>
@@ -47,11 +46,10 @@
         </select>
       </div>
 
-      <button id="checkinBtn" class="primary" type="button">Check-in tură (cu locație)</button>
-      <button id="taskBtn" class="secondary" type="button">Execută task (fără locație)</button>
+      <button id="continueBtn" class="primary" type="button">Continuă</button>
 
       <div id="status" role="status" aria-live="polite"></div>
-      <p class="note">Operatorul este memorat numai pe acest dispozitiv până la sfârșitul zilei. Locația este cerută numai la Check-in tură.</p>
+      <p class="note">Operatorul este memorat pe acest dispozitiv doar pentru ziua curentă. Sistemul stabilește automat pasul următor.</p>
     </section>
   </main>
 
@@ -62,9 +60,9 @@
   const FORM_BASE_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScX8oh0uhfPRBiNvSzKuPzLphcNtUnmcVA-0SOV5n06bFQ6cQ/viewform';
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyl6sJYPPnq03K-SWNPrd5RI2ppbFfk94QWOmtMD0GyUbv0P3WNkvxdyVs_sdG-Dd0IAQ/exec';
   const STORAGE_KEY = 'froo_ro00144_operator_day';
+  const CHECKIN_PREFIX = 'froo_ro00144_checkin_';
 
-  const checkinBtn = document.getElementById('checkinBtn');
-  const taskBtn = document.getElementById('taskBtn');
+  const continueBtn = document.getElementById('continueBtn');
   const operatorSelect = document.getElementById('operator');
   const operatorBlock = document.getElementById('operatorBlock');
   const rememberedBox = document.getElementById('rememberedBox');
@@ -106,6 +104,22 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ date: todayKey(), operator }));
     } catch (e) {}
     applyRememberedState(operator);
+  }
+
+  function checkinStorageKey(operator) {
+    return CHECKIN_PREFIX + todayKey() + '_' + operator;
+  }
+
+  function hasCheckinStartedToday(operator) {
+    try {
+      return localStorage.getItem(checkinStorageKey(operator)) === '1';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function markCheckinStarted(operator) {
+    try { localStorage.setItem(checkinStorageKey(operator), '1'); } catch (e) {}
   }
 
   function clearRememberedOperator() {
@@ -163,8 +177,7 @@
   }
 
   function setBusy(busy) {
-    checkinBtn.disabled = busy;
-    taskBtn.disabled = busy;
+    continueBtn.disabled = busy;
   }
 
   function showGeoError(error) {
@@ -174,51 +187,52 @@
     } else if (error.code === 2) {
       status.innerHTML = '<span class="bad">Locația nu a putut fi determinată.</span>';
     } else {
-      status.innerHTML = '<span class="bad">Localizarea a durat prea mult. Încearcă din nou, de preferat cu GPS-ul activ.</span>';
+      status.innerHTML = '<span class="bad">Localizarea a durat prea mult. Încearcă din nou.</span>';
     }
   }
 
   changeOperatorBtn.addEventListener('click', clearRememberedOperator);
 
-  checkinBtn.addEventListener('click', () => {
+  continueBtn.addEventListener('click', () => {
     const operator = requireOperator();
     if (!operator) return;
     rememberOperator(operator);
 
-    if (!navigator.geolocation) {
-      status.innerHTML = '<span class="bad">Acest browser nu permite accesul la locație.</span>';
+    // Prima utilizare din zi: check-in automat.
+    if (!hasCheckinStartedToday(operator)) {
+      if (!navigator.geolocation) {
+        status.innerHTML = '<span class="bad">Acest browser nu permite accesul la locație.</span>';
+        return;
+      }
+
+      setBusy(true);
+      status.textContent = 'Se pregătește începutul turei...';
+
+      navigator.geolocation.getCurrentPosition(async pos => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const accuracy = Math.round(pos.coords.accuracy || 0);
+        const distance = Math.round(distanceMeters(lat, lng, STORE_LAT, STORE_LNG));
+        const inStoreArea = distance <= RADIUS_M ? 'DA' : 'NU';
+
+        try {
+          await saveLocation({ operator, latitude: lat, longitude: lng, accuracy, distance, inStoreArea });
+          markCheckinStarted(operator);
+          status.innerHTML = '<span class="ok">Începutul turei a fost înregistrat.</span> Se deschide formularul...';
+          setTimeout(() => window.location.assign(buildFormUrl(operator, 'Check-in tura')), 600);
+        } catch (e) {
+          setBusy(false);
+          status.innerHTML = '<span class="bad">Înregistrarea nu a putut fi salvată. Încearcă din nou.</span>';
+        }
+      }, showGeoError, { enableHighAccuracy: true, timeout: 30000, maximumAge: 15000 });
+
       return;
     }
 
-    setBusy(true);
-    status.textContent = 'Se verifică locația...';
-
-    navigator.geolocation.getCurrentPosition(async pos => {
-      const lat = pos.coords.latitude;
-      const lng = pos.coords.longitude;
-      const accuracy = Math.round(pos.coords.accuracy || 0);
-      const distance = Math.round(distanceMeters(lat, lng, STORE_LAT, STORE_LNG));
-      const inStoreArea = distance <= RADIUS_M ? 'DA' : 'NU';
-
-      try {
-        await saveLocation({ operator, latitude: lat, longitude: lng, accuracy, distance, inStoreArea });
-        status.innerHTML = '<span class="ok">Locația de check-in a fost înregistrată.</span> Se deschide formularul...';
-        setTimeout(() => window.location.assign(buildFormUrl(operator, 'Check-in tura')), 700);
-      } catch (e) {
-        setBusy(false);
-        status.innerHTML = '<span class="bad">Locația a fost obținută, dar salvarea check-in-ului a eșuat.</span>';
-      }
-    }, showGeoError, { enableHighAccuracy: true, timeout: 30000, maximumAge: 15000 });
-  });
-
-  taskBtn.addEventListener('click', () => {
-    const operator = requireOperator();
-    if (!operator) return;
-    rememberOperator(operator);
-
+    // Restul zilei: merge direct la taskuri, fără o nouă localizare.
     setBusy(true);
     status.innerHTML = '<span class="ok">Se deschide lista de taskuri...</span>';
-    setTimeout(() => window.location.assign(buildFormUrl(operator, 'Executare task')), 300);
+    setTimeout(() => window.location.assign(buildFormUrl(operator, 'Executare task')), 250);
   });
 
   const remembered = getRememberedOperator();
