@@ -48,9 +48,7 @@
   const STORE_LNG = 26.04044731207135;
   const RADIUS_M = 100;
   const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScX8oh0uhfPRBiNvSzKuPzLphcNtUnmcVA-OSOV5n06bFQ6cQ/viewform';
-
-  // Va fi completat după ce adăugăm endpoint-ul doPost în Apps Script.
-  const SCRIPT_URL = '';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyl6sJYPPnq03K-SWNPrd5RI2ppbFfk94QWOmtMD0GyUbv0P3WNkvxdyVs_sdG-Dd0IAQ/exec';
 
   const btn = document.getElementById('btn');
   const status = document.getElementById('status');
@@ -66,11 +64,9 @@
   }
 
   async function saveLocation(payload) {
-    if (!SCRIPT_URL) return { skipped: true };
     const body = new URLSearchParams();
     Object.entries(payload).forEach(([k,v]) => body.append(k, String(v)));
     await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body });
-    return { skipped: false };
   }
 
   function showGeoError(error) {
@@ -112,14 +108,8 @@
           userAgent: navigator.userAgent
         });
 
-        if (!SCRIPT_URL) {
-          btn.disabled = false;
-          status.innerHTML = '<span class="ok">GPS funcționează.</span> Distanță calculată: <strong>' + distance + ' m</strong>. Următorul pas este conectarea salvării în registrul privat.';
-          return;
-        }
-
         status.innerHTML = '<span class="ok">Check-in înregistrat.</span> Se deschide formularul...';
-        setTimeout(() => window.location.assign(FORM_URL), 700);
+        setTimeout(() => window.location.assign(FORM_URL), 900);
       } catch (e) {
         btn.disabled = false;
         status.innerHTML = '<span class="bad">Locația a fost obținută, dar salvarea check-in-ului a eșuat.</span>';
