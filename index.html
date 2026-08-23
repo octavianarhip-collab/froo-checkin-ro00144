@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>FROO RO00144 - Check-in</title>
+  <title>FROO RO00144 - Operator</title>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; font-family: Arial, Helvetica, sans-serif; background: #f5f7f6; color: #1f2937; }
@@ -14,8 +14,10 @@
     label { display: block; font-weight: 700; margin-bottom: 8px; }
     select, button { width: 100%; min-height: 54px; border-radius: 12px; font-size: 17px; }
     select { border: 1px solid #cbd5e1; padding: 0 14px; background: white; }
-    button { margin-top: 16px; border: 0; background: #188038; color: white; font-weight: 700; cursor: pointer; }
+    button { margin-top: 14px; border: 0; font-weight: 700; cursor: pointer; padding: 0 14px; }
     button:disabled { opacity: .6; cursor: wait; }
+    .primary { background: #188038; color: white; }
+    .secondary { background: #e8f0ea; color: #137333; border: 1px solid #b7d6bf; }
     #status { margin-top: 18px; line-height: 1.45; min-height: 22px; }
     .note { margin-top: 20px; font-size: 13px; color: #6b7280; line-height: 1.45; }
     .ok { color: #137333; font-weight: 700; }
@@ -26,7 +28,8 @@
   <main class="wrap">
     <section class="card">
       <h1>FROO RO00144</h1>
-      <p class="sub">Check-in operator. Locația este solicitată o singură dată la începutul turei pentru verificarea prezenței la magazin.</p>
+      <p class="sub">Selectează Operatorul, apoi alege ce vrei să faci.</p>
+
       <label for="operator">Operator</label>
       <select id="operator">
         <option value="">Selectează operatorul</option>
@@ -34,30 +37,43 @@
         <option value="Anca">Anca</option>
         <option value="Operator tura scurta">Operator tură scurtă</option>
       </select>
-      <button id="btn" type="button">Continuă către formular</button>
+
+      <button id="checkinBtn" class="primary" type="button">Check-in tură (cu locație)</button>
+      <button id="taskBtn" class="secondary" type="button">Execută task (fără locație)</button>
+
       <div id="status" role="status" aria-live="polite"></div>
-      <p class="note">Prin continuare, browserul îți va cere permisiunea pentru locație. Locația este folosită numai pentru acest check-in.</p>
+      <p class="note">Locația este cerută numai la Check-in tură. Pentru executarea taskurilor nu se solicită locația.</p>
     </section>
   </main>
+
 <script>
   const STORE_LAT = 44.47831860912019;
   const STORE_LNG = 26.04044731207135;
   const RADIUS_M = 100;
   const FORM_BASE_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScX8oh0uhfPRBiNvSzKuPzLphcNtUnmcVA-0SOV5n06bFQ6cQ/viewform';
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyl6sJYPPnq03K-SWNPrd5RI2ppbFfk94QWOmtMD0GyUbv0P3WNkvxdyVs_sdG-Dd0IAQ/exec';
-  const btn = document.getElementById('btn');
+
+  const checkinBtn = document.getElementById('checkinBtn');
+  const taskBtn = document.getElementById('taskBtn');
+  const operatorSelect = document.getElementById('operator');
   const status = document.getElementById('status');
 
-  function buildFormUrl(operator) {
+  function getShift(operator) {
+    if (operator === 'Madalina' || operator === 'Anca') {
+      return 'Tura lunga 07:00-22:00';
+    }
+    if (operator === 'Operator tura scurta') {
+      return 'Tura scurta 07:00-16:00';
+    }
+    return '';
+  }
+
+  function buildFormUrl(operator, action) {
     const p = new URLSearchParams();
     p.set('usp', 'pp_url');
     p.set('entry.1368133778', operator);
-    p.set('entry.455388205', 'Check-in tura');
-    if (operator === 'Madalina' || operator === 'Anca') {
-      p.set('entry.16512039', 'Tura lunga 07:00-22:00');
-    } else if (operator === 'Operator tura scurta') {
-      p.set('entry.16512039', 'Tura scurta 07:00-16:00');
-    }
+    p.set('entry.16512039', getShift(operator));
+    p.set('entry.455388205', action);
     return FORM_BASE_URL + '?' + p.toString();
   }
 
@@ -76,34 +92,68 @@
     await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body });
   }
 
-  function showGeoError(error) {
-    btn.disabled = false;
-    if (error.code === 1) status.innerHTML = '<span class="bad">Accesul la locație a fost refuzat. Permite locația în browser și încearcă din nou.</span>';
-    else if (error.code === 2) status.innerHTML = '<span class="bad">Locația nu a putut fi determinată.</span>';
-    else status.innerHTML = '<span class="bad">Localizarea a durat prea mult. Încearcă din nou, de preferat cu GPS-ul activ.</span>';
+  function requireOperator() {
+    const operator = operatorSelect.value;
+    if (!operator) {
+      status.innerHTML = '<span class="bad">Selectează operatorul.</span>';
+      return null;
+    }
+    return operator;
   }
 
-  btn.addEventListener('click', () => {
-    const operator = document.getElementById('operator').value;
-    if (!operator) { status.innerHTML = '<span class="bad">Selectează operatorul.</span>'; return; }
-    if (!navigator.geolocation) { status.innerHTML = '<span class="bad">Acest browser nu permite accesul la locație.</span>'; return; }
-    btn.disabled = true;
+  function setBusy(busy) {
+    checkinBtn.disabled = busy;
+    taskBtn.disabled = busy;
+  }
+
+  function showGeoError(error) {
+    setBusy(false);
+    if (error.code === 1) {
+      status.innerHTML = '<span class="bad">Accesul la locație a fost refuzat. Permite locația în browser și încearcă din nou.</span>';
+    } else if (error.code === 2) {
+      status.innerHTML = '<span class="bad">Locația nu a putut fi determinată.</span>';
+    } else {
+      status.innerHTML = '<span class="bad">Localizarea a durat prea mult. Încearcă din nou, de preferat cu GPS-ul activ.</span>';
+    }
+  }
+
+  checkinBtn.addEventListener('click', () => {
+    const operator = requireOperator();
+    if (!operator) return;
+
+    if (!navigator.geolocation) {
+      status.innerHTML = '<span class="bad">Acest browser nu permite accesul la locație.</span>';
+      return;
+    }
+
+    setBusy(true);
     status.textContent = 'Se verifică locația...';
+
     navigator.geolocation.getCurrentPosition(async pos => {
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
       const accuracy = Math.round(pos.coords.accuracy || 0);
       const distance = Math.round(distanceMeters(lat, lng, STORE_LAT, STORE_LNG));
       const inStoreArea = distance <= RADIUS_M ? 'DA' : 'NU';
+
       try {
         await saveLocation({ operator, latitude: lat, longitude: lng, accuracy, distance, inStoreArea });
-        status.innerHTML = '<span class="ok">Check-in înregistrat.</span> Se deschide formularul...';
-        setTimeout(() => window.location.assign(buildFormUrl(operator)), 900);
+        status.innerHTML = '<span class="ok">Locația de check-in a fost înregistrată.</span> Se deschide formularul...';
+        setTimeout(() => window.location.assign(buildFormUrl(operator, 'Check-in tura')), 700);
       } catch (e) {
-        btn.disabled = false;
+        setBusy(false);
         status.innerHTML = '<span class="bad">Locația a fost obținută, dar salvarea check-in-ului a eșuat.</span>';
       }
     }, showGeoError, { enableHighAccuracy: true, timeout: 30000, maximumAge: 15000 });
+  });
+
+  taskBtn.addEventListener('click', () => {
+    const operator = requireOperator();
+    if (!operator) return;
+
+    setBusy(true);
+    status.innerHTML = '<span class="ok">Se deschide lista de taskuri...</span>';
+    setTimeout(() => window.location.assign(buildFormUrl(operator, 'Executare task')), 300);
   });
 </script>
 </body>
